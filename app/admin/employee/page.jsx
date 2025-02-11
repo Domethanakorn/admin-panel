@@ -7,13 +7,12 @@ import { useState, useEffect } from "react";
 export default function EmployeeList() {
     const [isModalOpen, setIsModalOpen] = useState(false); // สถานะเปิด/ปิด modal
     const [employee, setEmployee] = useState({
-        id: "",
         name: "",
+        EMPID: "",   
         idCard: "",
         phone: "",
         address: "",
         currentAddress: "",
-        password: "",
         startDate: "",
         createdAt: null,
         updatedAt: null,
@@ -24,13 +23,12 @@ export default function EmployeeList() {
     // ฟังก์ชันเปิด modal
     const handleOpenModal = () => {
         setEmployee({
-            id: "",
             name: "",
+            EMPID: "",   
             idCard: "",
             phone: "",
             address: "",
             currentAddress: "",
-            password: "",
             startDate: "",
             createdAt: null,
             updatedAt: null,
@@ -60,6 +58,7 @@ export default function EmployeeList() {
         formData.append("upload_preset", "employee_images"); // Replace with your preset
         formData.append("cloud_name", "dsbdsiefa"); // Replace with your cloud name
         formData.append("folder", "employees/");
+
         try {
             const response = await fetch(
                 "https://api.cloudinary.com/v1_1/dsbdsiefa/image/upload",
@@ -81,27 +80,12 @@ export default function EmployeeList() {
             return null;
         }
     };
-    const generateEmployeeId = () => {
-        const randomId = Math.floor(Math.random() * 90000) + 1000; // สุ่มเลข 5 หลักจาก 1000 ถึง 9999
-        return `EMP${randomId}`;
-    };
-
-    const generatePassword = () => {
-         const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-         let password = "";
-         for(let i = 0; i < 8; i++){
-            password += characters.charAt(Math.floor(Math.random() * characters.length));
-         }
-         return password
-    }
 
     // ฟังก์ชันบันทึกข้อมูลพนักงาน
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const employeeId = generateEmployeeId();
-        const password =  employee.id ? employee.password :  generatePassword();
-        console.log(employeeId);
-        // อัปโหลดรูปภาพก่อน
+    
+        // ตรวจสอบว่ามี file หรือไม่ (ถ้ามีอัพโหลด)
         let profilePictureUrl = employee.profilePicture;
         if (employee.file) {
             profilePictureUrl = await uploadToCloudinary(employee.file);
@@ -110,6 +94,7 @@ export default function EmployeeList() {
                 return;
             }
         }
+    
         const date = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Bangkok",
             year: "numeric",
@@ -120,56 +105,85 @@ export default function EmployeeList() {
             second: "2-digit",
             hour12: false,
         });
-
+    
+        // สร้างข้อมูล employee ที่จะถูกส่งไป
         const employeeData = {
-             ...employee,
-             id: employee.id || employeeId,
-             password: password,
-             profilePicture: profilePictureUrl ,
-             createdAt: employee.id ? employee.createdAt : date,
-             updatedAt: employee.id ? date : null,
-             file: undefined 
-            };
-
-        try {
-                let response;
-                    console.log(employee.id)
-            if(employee.id){
-                    response = await fetch("/api/employees/",{
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(employeeData),
-                    });
-            }else{
-                 response = await fetch("/api/employees", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(employeeData),
-            });
+            ...employee,
+            profilePicture: profilePictureUrl,
+            file: undefined,
+        };
+    
+        // ถ้าไม่มี EMPID แสดงว่าเป็นการเพิ่มใหม่
+        if (!employee.EMPID) {
+            employeeData.createdAt = date; // ถ้าไม่มี EMPID ให้ใส่ createdAt สำหรับเพิ่มข้อมูลใหม่
+    
+            // ดึง max EMPID แล้ว increment
+            const maxEmpId = await getMaxEmpId();
+            employeeData.EMPID = maxEmpId;  // ตั้ง EMPID ใหม่
+        }else{
+            employeeData.updatedAt = date;
         }
-            if (response.ok) {
-                alert(employee.id ? "Employee updated successfully!": "Employee added successfully!");
-                handleCloseModal();
-                fetchEmployees(); // ดึงข้อมูลใหม่หลังเพิ่ม
+    
+        try {
+            let response;
+            
+            if (employee.EMPID !== "") {
+                console.log("Performing PUT for updating employee");
+                response = await fetch("/api/employees", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(employeeData),
+                });
             } else {
-                alert("Failed to save employee.");
+                console.log("Performing POST for adding new employee");
+                response = await fetch("/api/employees", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(employeeData),
+                });
             }
         
+            const result = await response.json(); // response JSON
+        
+            if (response.ok) {
+                alert(employee.EMPID ? "Employee updated successfully" : "Employee added successfully");
+                fetchEmployees();
+                handleCloseModal();
+            } else {
+             
+                alert(`${result.message || "Unknown error"}`);
+            }
         } catch (error) {
             console.error("Error saving employee:", error);
             alert("Error saving employee.");
         }
+        
+    };
+    
+    // ฟังก์ชันดึง EMPID ล่าสุด
+    const getMaxEmpId = async () => {
+        try {
+            const response = await fetch("/api/employees");  // ใช้ API ดึงข้อมูลพนักงานทั้งหมด
+            if (response.ok) {
+                const employees = await response.json();
+                if (employees && employees.length > 0) {
+                    // หาค่า EMPID ที่สูงที่สุดและเพิ่ม 1
+                    const maxEmpId = Math.max(...employees.map(emp => parseInt(emp.EMPID.replace('EMP', ''))));
+                    return `EMP${maxEmpId + 1}`;
+                }
+            }
+            return 'EMP1';  // ถ้าไม่มีพนักงานเลย ให้เริ่มจาก EMP1
+        } catch (error) {
+            console.error("Error fetching employees:", error);
+            return console.log("Can't added Employees");  
+        }
     };
 
-  //เเสดงหน้าเเก้ไข
-    const handleEdit = (emp) =>{
+    // แสดงหน้าแก้ไข
+    const handleEdit = (emp) => {
         setEmployee({
-            id: emp.id,
             name: emp.name,
+            EMPID: emp.EMPID,    
             idCard: emp.idCard,
             phone: emp.phone,
             address: emp.address,
@@ -181,40 +195,35 @@ export default function EmployeeList() {
             file: null,
         });
         setIsModalOpen(true);
-    }
+    };
 
     // ฟังก์ชันลบข้อมูลพนักงาน
-    const handleDelete = async (id) =>{
-        const confirmDelete = window.confirm('Are you want to delete employee?');
-        if(!confirmDelete) return;
-       
+    const handleDelete = async (EMPID) => { 
+        const confirmDelete = window.confirm('Are you sure you want to delete this employee?');
+        if (!confirmDelete) return;
 
-        try{
-            console.log('Deleting employee with ID:', id); 
+        try {
+            console.log('Deleting employee with EMPID:', EMPID); // ใช้ EMPID
             const response = await fetch("/api/employees", {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ id: id }),
-                
-            })
-           
-            if(response.ok){
+                body: JSON.stringify({ EMPID: EMPID }), // ส่ง EMPID สำหรับการลบ
+            });
+
+            if (response.ok) {
                 alert("Delete employee successfully!");
                 fetchEmployees();
-            }else{
-                alert("Falied to delete employee.")
+            } else {
+                alert("Failed to delete employee.");
             }
 
-        }catch(error){
-                console.log("Error saving employee ",error);
-                alert("Error saving employee");
+        } catch (error) {
+            console.log("Error deleting employee", error);
+            alert("Error deleting employee");
         }
-    }
-
-
-
+    };
 
     // ฟังก์ชันดึงข้อมูลพนักงานทั้งหมด
     const fetchEmployees = async () => {
@@ -222,25 +231,24 @@ export default function EmployeeList() {
             const response = await fetch("/api/employees");
             if (response.ok) {
                 const data = await response.json();
-
-                if (data && data.length > 0){
-                    console.log("Fetched employee data:", data); 
+    
+                if (data && data.length > 0) {
+                    console.log("Fetched employee data:", data);
                     setEmployees(data);
-                }else{
-                    console.log("No data found");
-                 
+                } else {
+                    console.log("No employees found in the database."); // ข้อความเมื่อไม่มีข้อมูล
+                    setEmployees([]); // ตั้งค่าให้เป็นอาร์เรย์ว่าง
                 }
-               
             } else {
-                console.error("Failed to fetch employee.");
-                setDesserts([]);
-                
+                console.error(`Failed to fetch employees. Status: ${response.status}`);
+                setEmployees([]); // ตั้งค่าเป็นอาร์เรย์ว่างในกรณีดึงข้อมูลไม่สำเร็จ
             }
         } catch (error) {
-            console.error("Error fetching desserts:", error);
+            console.error("Error fetching employees:", error);
+            setEmployees([]); // ตั้งค่าให้เป็นอาร์เรย์ว่างในกรณีเกิด error
         }
     };
-
+    
     // ดึงข้อมูลพนักงานเมื่อ component โหลดครั้งแรก
     useEffect(() => {
         fetchEmployees();
@@ -249,15 +257,16 @@ export default function EmployeeList() {
 
 
     return (
-        <main className="p-5 flex flex-col gap-5 ">
-        <div className="flex flex-col bg-white p-6 rounded-xl shadow-md w-full">
+        <main className="p-5 flex flex-col gap-5  ">
+        <div className="flex flex-col bg-white p-6 rounded-xl shadow-md w-full overflow-auto ">
             {/* Header */}
             <div className="flex items-center justify-between pb-4">
                 <h1 className="text-xl font-semibold">Employee Management</h1>
                 <Button
-                    className="ml-auto py-3 font-semibold flex items-center"
+                    className="ml-auto py-3 font-semibold flex items-center bg-indigo-600 text-white hover:bg-[#3700B3]"
                     color="primary"
                     onClick={handleOpenModal}
+                    
                 >
                     Add Employee <PlusCircle className="h-4 ml-2" />
                 </Button>
@@ -331,23 +340,28 @@ export default function EmployeeList() {
                                 />
                             </div>
                             <div className="mb-4">
+                            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2 ml-2">
+                                    Upload Employee Photo
+                                </label>
                                 <Input
                                     type="file"
+                                    title="Select Photo"
                                     onChange={(e) =>
                                         setEmployee((prev) => ({
                                             ...prev,
                                             file: e.target.files[0],
                                         }))
                                     }
-                                    label=""
-                                    fullWidth
                                 />
                             </div>
                             <div className="flex justify-end gap-4">
                                 <Button onClick={handleCloseModal} auto flat color="error">
                                     Cancel
                                 </Button>
-                                <Button type="submit" color="primary">
+                                <Button type="submit"
+                                     color="primary"
+                                      className=" bg-indigo-600 text-white hover:bg-[#3700B3]"
+                                >
                                     Save
                                 </Button>
                             </div>
@@ -359,7 +373,7 @@ export default function EmployeeList() {
        {/* Employee Table */}
        <div className="overflow-x-auto max-w-full ">
        <table className="min-w-full table-fixed border-collapse border border-gray-300 rounded-lg shadow-sm">
-    <thead className="bg-gray-200">
+    <thead className="bg-indigo-300">
         <tr>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ID</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Profile</th>
@@ -368,7 +382,6 @@ export default function EmployeeList() {
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Phone</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Address</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Current Address</th>
-            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Password</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Start Date</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">CreatedAt</th>
             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">UpdatedAt</th>
@@ -376,14 +389,18 @@ export default function EmployeeList() {
         </tr>
     </thead>
     <tbody className="bg-white">
-        {employees.length === 0 ? (
-            <tr>
-                <td colSpan="12" className="px-4 py-2 text-center text-sm text-gray-500">No data</td>
-            </tr>
-        ) : (
-            employees.map((emp, index) => (
+    {employees.length === 0 ? (
+        <tr><td colSpan="12" className="px-4 py-2 text-center text-sm text-gray-500">No data</td></tr>
+    ) : (
+        employees
+            .sort((a, b) => {
+                const empA = parseInt(a.EMPID.replace('EMP', '')); // ดึงเฉพาะตัวเลขของ EMPID
+                const empB = parseInt(b.EMPID.replace('EMP', ''));
+                return empA - empB; // เรียงจากน้อยไปมาก
+            })
+            .map((emp, index) => (
                 <tr key={index}>
-                    <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.id}</td>
+                    <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.EMPID}</td> 
                     <td className="px-4 py-2 border border-gray-300">
                         <img
                             src={emp.profilePicture}
@@ -396,7 +413,6 @@ export default function EmployeeList() {
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.phone}</td>
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.address}</td>
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.currentAddress}</td>
-                    <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.password}</td>
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.startDate}</td>
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.createdAt}</td>
                     <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.updatedAt}</td>
@@ -409,19 +425,17 @@ export default function EmployeeList() {
                         </button>
                         <button
                             className="text-red-500 hover:underline"
-                            onClick={() => handleDelete(emp.id)}
+                            onClick={() => handleDelete(emp.EMPID)}
                         >
                             Delete
                         </button>
                     </td>
                 </tr>
             ))
-        )}
-    </tbody>
+    )}
+</tbody>
 </table>
-
 </div>
-
 </div>
  </main>
     );

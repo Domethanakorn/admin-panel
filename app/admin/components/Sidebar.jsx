@@ -1,90 +1,63 @@
 "use client";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, BookHeart, PackageSearch, CircleDollarSign, NotebookText, UserSearch, LogOut, CakeIcon, CakeSlice, ListOrdered, GlassWaterIcon } from 'lucide-react';
+import { UserSearch, NotebookText, CakeSlice, GlassWaterIcon, ListOrdered, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firestore/firebase";
 import { useRouter } from "next/navigation";
 
-
 export default function Sidebar() {
-    const router = useRouter(); // เรียก useRouter ใน Component หลัก
+    const router = useRouter();
 
     const handleLogout = async () => {
-
-        await signOut(auth);  // Log out จาก Firebase
-        router.push("/");  //กลับไปหน้า Login
+        await signOut(auth);
+        router.push("/");
     };
 
     const menuList = [
-        {
-            name: "Dashboard",
-            Link: "/admin",
-            icon: <LayoutDashboard className="h-5 w-5" />,
-        },
-        {
-            name: "Employee",
-            Link: "/admin/employee",
-            icon: <UserSearch className="h-5 w-5" />,
-        },
-        {
-            name: "Member",
-            Link: "/admin/member",
-            icon: <NotebookText className="h-5 w-5" />,
-        },
-        {
-            name: "Dessert",
-            Link: "/admin/dessert",
-            icon: <CakeSlice className="h-5 w-5" />,
-        },
-        {
-            name: "Beverage",
-            Link: "/admin/beverage",
-            icon: <GlassWaterIcon className="h-5 w-5" />,
-        },
-        {
-            name: "Order",
-            Link: "/admin/order",
-            icon: <ListOrdered className="h-5 w-5" />,
-        },
+        { name: "Employee", Link: "/admin/employee", icon: <UserSearch className="h-5 w-5" /> },
+        { name: "Member", Link: "/admin/member", icon: <NotebookText className="h-5 w-5" /> },
+        { name: "Dessert", Link: "/admin/dessert", icon: <CakeSlice className="h-5 w-5" /> },
+        { name: "Beverage", Link: "/admin/beverage", icon: <GlassWaterIcon className="h-5 w-5" /> },
+        { name: "Order", Link: "/admin/order", icon: <ListOrdered className="h-5 w-5" /> },
     ];
 
     return (
-        <section className="flex flex-col gap-7 bg-white border-r px-5 py-3 h-screen overflow-hidden w-[240px]">
+        <section className="flex flex-col gap-5 bg-white border-r px-6 py-4 h-screen w-[250px] shadow-md">
             <div className="flex justify-center py-3">
-               
+                <h2 className="text-lg font-bold text-indigo-600">CAFE MANAGEMENT</h2>
             </div>
 
-            <ul className="flex-1 flex flex-col gap-4 h-full overflow-y-auto text-medium">
-                {menuList?.map((item, key) => {
-                    return (
-                        <Tap item={item} key={key} />
-                    );
-                })}
+            <ul className="flex-1 flex flex-col gap-3 overflow-y-auto">
+                {menuList.map((item, key) => (
+                    <SidebarItem item={item} key={key} />
+                ))}
             </ul>
-            <div className="flex justify-center w-full">
-                <button
-                    className="flex gap-2 items-center px-3 py-2 hover:bg-indigo-100 rounded-xl w-full justify-center ease-soft-spring duration-400 transition-all"
-                    onClick={handleLogout}
-                >
-                    <LogOut className="h-5 w-5" />Logout
-                </button>
-            </div>
+
+            <button
+                className="flex items-center justify-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 border rounded-lg hover:bg-red-100 transition"
+                onClick={handleLogout}
+            >
+                <LogOut className="h-5 w-5" />
+                Logout
+            </button>
         </section>
     );
 }
 
-function Tap({ item }) {
+function SidebarItem({ item }) {
     const pathname = usePathname();
-    const isSelected = pathname === item?.Link;
+    const isSelected = pathname === item.Link;
+
     return (
-        <Link href={item?.Link}>
+        <Link href={item.Link}>
             <li
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold ease-soft-spring transition-all duration-300
-                    ${isSelected ? " bg-primary text-white" : "bg-white text-black"}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium cursor-pointer transition-all
+                    ${isSelected ? "bg-indigo-600 text-white" : "text-gray-700 hover:bg-indigo-100"}
                 `}
             >
-                {item?.icon} {item?.name}
+                {item.icon}
+                <span className="text-sm">{item.name}</span>
             </li>
         </Link>
     );

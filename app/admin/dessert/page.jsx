@@ -1,5 +1,4 @@
 "use client"
-
 import { Button, Input } from "@nextui-org/react";
 import { PlusCircle } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -8,13 +7,11 @@ import { useState, useEffect } from "react";
 export default function DessertList() {
     const [isModalOpen, setIsModalOpen] = useState(false); // สถานะเปิด/ปิด modal
     const [dessert, setDessert] = useState({
-        id: "",
         name: "",
+        DESID: "",
         category: "",
         description: "",
         price: 0,
-        stock: 0,
-        status: "",
         dessertPicture: "",
         createdAt: null,
         updatedAt: null,
@@ -26,13 +23,11 @@ export default function DessertList() {
     // ฟังก์ชันเปิด modal
     const handleOpenModal = () => {
         setDessert({
-            id: "",
             name: "",
+            DESID: "",
             category: "",
             description: "",
             price: 0,
-            stock: 0,
-            status: "",
             dessertPicture: "",
             createdAt: null,
             updatedAt: null,
@@ -82,18 +77,12 @@ export default function DessertList() {
             return null;
         }
     };
-    const generateDessertId = () => {
-        const randomId = Math.floor(Math.random() * 90000) + 1000; // สุ่มเลข 5 หลักจาก 1000 ถึง 9999
-        return `DES${randomId}`;
-    };
-
+    
 
     // ฟังก์ชันบันทึกข้อมูลพนักงาน
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const dessertId = generateDessertId();
-       
-        console.log(dessertId);
+      
         // อัปโหลดรูปภาพก่อน
         let dessertPictureUrl = dessert.dessertPicture;
         if (dessert.file) {
@@ -103,7 +92,6 @@ export default function DessertList() {
                 return;
             }
         }
-        const status = dessert.stock <= 0 ? "หมด" : "มี";
         const date = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Bangkok",
             year: "numeric",
@@ -116,19 +104,22 @@ export default function DessertList() {
         });
         const dessertData = {
              ...dessert,
-             id: dessert.id || dessertId,
              dessertPicture: dessertPictureUrl ,
-             status: status,
-             createdAt: dessert.id ? dessert.createdAt : date,
-             updatedAt: dessert.id ? date : null,
              file: undefined,
             
             };
+            if(!dessert.DESID){
+                dessertData.createdAt = date;
+                const maxDesId = await getMaxDesId();
+                dessertData.DESID = maxDesId;
+            }else{
+                dessertData.updatedAt = date;
+            }
 
         try {
                 let response;
                     console.log(dessert.id)
-            if(dessert.id){
+            if(dessert.DESID !== ""){
                     response = await fetch("/api/desserts",{
                         method: "PUT",
                         headers: {
@@ -146,7 +137,7 @@ export default function DessertList() {
             });
         }
             if (response.ok) {
-                alert(dessert.id ? "Dessert updated successfully!": "Dessert added successfully!");
+                alert(dessert.DESID ? "Dessert updated successfully!": "Dessert added successfully!");
                 handleCloseModal();
                 fetchDesserts(); // ดึงข้อมูลใหม่หลังเพิ่ม
             } else {
@@ -159,16 +150,31 @@ export default function DessertList() {
         }
     };
 
+    const getMaxDesId = async () =>{
+        try {
+            const response = await fetch("/api/desserts");
+        if(response.ok){
+            const desserts = await response.json();
+            if(desserts && desserts.length > 0){
+                const maxDesId = Math.max(...desserts.map(des => parseInt(des.DESID.replace('DES',''))));
+                return `DES${maxDesId + 1}`;
+            }
+        }
+            return 'DES1';
+        }catch (error){
+            console.error("Error fetching desserts:",error);
+            return console.log("Can't added Desserts");
+        }
+    }
+
   //เเสดงหน้าเเก้ไข
     const handleEdit = (des) =>{
         setDessert({
-            id: des.id,
             name:  des.name,
+            DESID: des.DESID,
             category:  des.category,
             description:  des.description,
             price:  des.price,
-            stock: des.stock,
-            status: des.status,
             dessertPicture: des.dessertPicture,
             createdAt: des.createdAt,
             updatedAt: des.updatedAt,
@@ -178,19 +184,19 @@ export default function DessertList() {
     }
 
     // ฟังก์ชันลบข้อมูลขนม
-    const handleDelete = async (id) =>{
+    const handleDelete = async (DESID) =>{
         const confirmDelete = window.confirm('Are you want to delete dessert?');
         if(!confirmDelete) return;
        
 
         try{
-            console.log('Deleting dessert with ID:', id); 
+            console.log('Deleting dessert with ID:', DESID); 
             const response = await fetch("/api/desserts", {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ id: id }),
+                body: JSON.stringify({ DESID: DESID }),
                 
             })
            
@@ -208,8 +214,6 @@ export default function DessertList() {
     }
 
 
-
-
     // ฟังก์ชันดึงข้อมูลขนมทั้งหมด
     const fetchDesserts = async () => {
         try {
@@ -222,7 +226,7 @@ export default function DessertList() {
                     setDesserts(data);
                 }else{
                     console.log("No data found");
-                 
+                    setDesserts([]);
                 }
                
             } else {
@@ -265,8 +269,9 @@ export default function DessertList() {
             <div className="flex items-center justify-between pb-4">
                 <h1 className="text-xl font-semibold">Dessert Management</h1>
                 <Button
-                    className="ml-auto py-3 font-semibold flex items-center"
+                    className="ml-auto py-3 font-semibold flex items-center bg-indigo-600 text-white hover:bg-[#3700B3]"
                     color="primary"
+                     
                     onClick={handleOpenModal}
                 >
                     Add Dessert <PlusCircle className="h-4 ml-2" />
@@ -333,20 +338,11 @@ export default function DessertList() {
                                     required
                                 />
                             </div>
+        
                             <div className="mb-4">
-                                <Input
-                                    type="number"
-                                    name="stock"
-                                    value={dessert.stock}
-                                    onChange={handleInputChange}
-                                    label="Stock"
-                                    fullWidth
-                                    required
-                                />
-                            </div>
-                       
-                    
-                            <div className="mb-4">
+                            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2 ml-2">
+                                    Upload Dessert Photo
+                                </label>
                                 <Input
                                     type="file"
                                     onChange={(e) =>
@@ -363,7 +359,10 @@ export default function DessertList() {
                                 <Button onClick={handleCloseModal} auto flat color="error">
                                     Cancel
                                 </Button>
-                                <Button type="submit" color="primary">
+                                <Button type="submit" 
+                                color="primary"
+                                 className=" bg-indigo-600 text-white hover:bg-[#3700B3]"
+                                >
                                     Save
                                 </Button>
                             </div>
@@ -372,10 +371,10 @@ export default function DessertList() {
                 </div>
             )}
 
-       {/* Dessert Table */}
-       <div className="overflow-x-auto max-w-full">
+{/* Dessert Table */}
+<div className="overflow-x-auto max-w-full">
     <table className="min-w-full table-fixed border-collapse border border-gray-300 rounded-lg shadow-sm">
-        <thead className="bg-gray-200">
+        <thead className="bg-indigo-300">
             <tr>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ID</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Image</th>
@@ -383,8 +382,6 @@ export default function DessertList() {
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Category</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Description</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Price</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Stock</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Status</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">CreatedAt</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">UpdatedAt</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Action</th>
@@ -393,43 +390,48 @@ export default function DessertList() {
         <tbody className="bg-white">
             {desserts.length === 0 ? (
                 <tr>
-                    <td colSpan="11" className="px-4 py-2 text-center text-sm text-gray-500">No data</td>
+                    <td colSpan="9" className="px-4 py-2 text-center text-sm text-gray-500">No data</td>
                 </tr>
             ) : (
-                desserts.map((des, index) => (
-                    <tr key={index}>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.id}</td>
-                        <td className="px-4 py-2 border border-gray-300">
-                            <img
-                                src={des.dessertPicture}
-                                alt="Profile"
-                                className="h-10 w-10 rounded-full object-cover"
-                            />
-                        </td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.name}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.category}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.description}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.price}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.stock}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.status}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.createdAt}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.updatedAt}</td>
-                        <td className="px-4 py-2 border border-gray-300 text-sm truncate">
-                            <button
-                                className="text-blue-500 hover:underline mr-2"
-                                onClick={() => handleEdit(des)}
-                            >
-                                Edit
-                            </button>
-                            <button
-                                className="text-red-500 hover:underline"
-                                onClick={() => handleDelete(des.id)}
-                            >
-                                Delete
-                            </button>
-                        </td>
-                    </tr>
-                ))
+                desserts
+                    .sort((a, b) => {
+                        // ดึงตัวเลขหลัง DES แล้วเปรียบเทียบ
+                        const idA = parseInt(a.DESID.replace('DES', ''), 10);
+                        const idB = parseInt(b.DESID.replace('DES', ''), 10);
+                        return idA - idB; // เรียงลำดับจากน้อยไปมาก
+                    })
+                    .map((des, index) => (
+                        <tr key={index}>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.DESID}</td>
+                            <td className="px-4 py-2 border border-gray-300">
+                                <img
+                                    src={des.dessertPicture}
+                                    alt="Profile"
+                                    className="h-10 w-10 rounded-full object-cover"
+                                />
+                            </td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.name}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.category}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.description}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.price}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.createdAt}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">{des.updatedAt}</td>
+                            <td className="px-4 py-2 border border-gray-300 text-sm truncate">
+                                <button
+                                    className="text-blue-500 hover:underline mr-2"
+                                    onClick={() => handleEdit(des)}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    className="text-red-500 hover:underline"
+                                    onClick={() => handleDelete(des.DESID)}
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    ))
             )}
         </tbody>
     </table>

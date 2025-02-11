@@ -1,52 +1,44 @@
 "use client";
-import { useState,useEffect,useRef } from "react";
+import { useState } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
-import { usePathname } from "next/navigation";
 
-export default function AdminLayout({ children }){
+export default function AdminLayout({ children }) {
   const [isOpen, setIsOpen] = useState(false);
-  const pathname = usePathname();  
-  const sidebarRef = useRef(null);
- console.log(isOpen);
+
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
   };
 
-  useEffect(() => {
-      toggleSidebar;
-  }, [pathname]);
-
-  useEffect(() => {
-    function handleClickOutsideEvent(event){
-      if (sidebarRef.current && !sidebarRef?.current?.contains(event.target)){
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutsideEvent);
-    return () => {
-        document.removeEventListener("mousedown", handleClickOutsideEvent);
-    };
-  
-  }, []);
-
-
-  return     (
-    <main className=" relative flex ">
-      <div className="hidden md:block ">
-      <Sidebar />
+  return (
+    <main className="relative flex">
+      
+      {/* Sidebar สำหรับหน้าจอขนาดใหญ่ */}
+      <div className="hidden md:block">
+        
+        <Sidebar />
       </div>
-      <div 
-      ref={sidebarRef}
-      className={`fixed md:hidden ease-in-out transition-all duration-400
-        ${isOpen ? "translate-x-0":"-translate-x-[240px]"}`}>
-      <Sidebar />
+
+      {/* Sidebar สำหรับหน้าจอขนาดเล็ก */}
+      <div
+        className={`fixed md:hidden top-0 left-0 h-full z-40 bg-white shadow-lg ease-in-out transition-all duration-300 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <Sidebar />
       </div>
-      <section className="flex-1 flex flex-col min-h-screen ">
-        <Header toggleSidebar={toggleSidebar} />
-        <section className="flex-1 bg-[#eff3f4]">{children}</section>
+
+      {/* เนื้อหาหลัก */}
+      <section className="flex-1 flex flex-col min-h-screen">
+        {/* Header */}
+       {/*   <Header toggleSidebar={toggleSidebar} /> */}
+
+        {/* Content Area */}
+        <section className="w-full flex-1 bg-[#eff3f4] p-4 overflow-auto">
+          {/* Wrapper สำหรับทำให้เนื้อหาภายใน Responsive */}
+          <div className="w-full max-w-[1440px]  mx-auto">{children}</div>
+        </section>
       </section>
     </main>
-
-        );
+  );
 }

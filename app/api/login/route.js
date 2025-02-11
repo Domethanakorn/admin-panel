@@ -6,7 +6,7 @@ export async function POST(request){
 
     try{
         
-        const q = query(collection(db, 'employees'),where('id','==',username));
+        const q = query(collection(db, 'employees'),where('EMPID','==',username));
          const  employeeSnapshot =  await getDocs(q);
 
          if(employeeSnapshot.empty){
@@ -17,7 +17,7 @@ export async function POST(request){
          const userDoc = employeeSnapshot.docs[0];
          const userData = userDoc.data();
 
-         if (userData.password !== password){
+         if (userData.idCard !== password){
             return new Response(JSON.stringify({message: "Invalid password"}), {status: 404});
             
          }
