@@ -36,7 +36,7 @@ export default function AdminLayout({ children }) {
         {/* Content Area */}
         <section className="w-full flex-1 bg-[#eff3f4] p-4 overflow-auto">
           {/* Wrapper สำหรับทำให้เนื้อหาภายใน Responsive */}
-          <div className="w-full max-w-[1440px]  mx-auto">{children}</div>
+          <div className="w-full  max-w-[1440px]  mx-auto">{children}</div>
         </section>
       </section>
     </main>

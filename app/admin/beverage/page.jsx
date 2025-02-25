@@ -2,439 +2,430 @@
 import { Button, Input } from "@nextui-org/react";
 import { PlusCircle } from "lucide-react";
 import { useState, useEffect } from "react";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp, where } from "firebase/firestore";
+import { db } from "@/lib/firestore/firebase";
 
 export default function BeverageList() {
-    const [isModalOpen, setIsModalOpen] = useState(false); // สถานะเปิด/ปิด modal
-    const [beverage, setBeverage] = useState({
-        name: "",
-        BEVID: "",
-        category: "",
-        description: "",
-        price: 0,
-        stock: 0,
-        status: "",
-        beveragePicture: "",
-        createdAt: null,
-        updatedAt: null,
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [beverage, setBeverage] = useState({
+    name: "",
+    description: "",
+    productId: "",
+    price: "",
+    imageUrl: "",
+    createdAt: null,
+    updatedAt: null,
+  });
+  const [beverages, setBeverages] = useState([]);
+
+  const handleOpenModal = () => {
+    setBeverage({
+      name: "",
+      description: "",
+      productId: "",
+      price: "",
+      imageUrl: "",
+      createdAt: null,
+      updatedAt: null,
     });
-    const [beverages, setBeverages] = useState([]); // State เก็บข้อมูลเครื่องดื่ม
+    setIsModalOpen(true);
+  };
 
-    const [categories, setCategories] = useState(["Coffees", "Teas", "Juices", "Sodas"]);
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
 
-    // ฟังก์ชันเปิด modal
-    const handleOpenModal = () => {
-        setBeverage({
-            name: "",
-            BEVID: "",
-            category: "",
-            description: "",
-            price: 0,
-            stock: 0,
-            status: "",
-            beveragePicture: "",
-            createdAt: null,
-            updatedAt: null,
-        });
-        setIsModalOpen(true);
-    };
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setBeverage((prev) => ({
+      ...prev,
+      [name]: name === "price" ? parseInt(value, 10) || 0 : value,
+    }));
+  };
 
-    // ฟังก์ชันปิด modal
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-    };
+  const uploadToCloudinary = async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", "beverage_images");
+    formData.append("cloud_name", "dsbdsiefa");
+    formData.append("folder", "beverages/");
 
-    // ฟังก์ชันจัดการการเปลี่ยนแปลงใน input
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setBeverage((prev) => ({
-            ...prev,
-            [name]: name === 'price' ? Number(value) : value,
-        }));
-    };
+    try {
+      const response = await fetch(
+        "https://api.cloudinary.com/v1_1/dsbdsiefa/image/upload",
+        { method: "POST", body: formData }
+      );
 
-    // ฟังก์ชันอัปโหลดรูปภาพไปยัง Cloudinary
-    const uploadToCloudinary = async (file) => {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", "beverage_images"); // Replace with your preset
-        formData.append("cloud_name", "dsbdsiefa"); // Replace with your cloud name
-        formData.append("folder", "beverages/");
-        try {
-            const response = await fetch(
-                "https://api.cloudinary.com/v1_1/dsbdsiefa/image/upload",
-                {
-                    method: "POST",
-                    body: formData,
-                }
-            );
+      if (response.ok) {
+        const data = await response.json();
+        return data.secure_url;
+      } else {
+        console.error("ไม่สามารถอัปโหลดรูปภาพได้");
+        return null;
+      }
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ:", error);
+      return null;
+    }
+  };
 
-            if (response.ok) {
-                const data = await response.json();
-                return data.secure_url; // URL ของรูปภาพ
-            } else {
-                console.error("Failed to upload image.");
-                return null;
-            }
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            return null;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      let imageUrl = beverage.imageUrl;
+
+      if (beverage.file) {
+        imageUrl = await uploadToCloudinary(beverage.file);
+        if (!imageUrl) {
+          alert("ไม่สามารถอัปโหลดรูปภาพได้");
+          return;
         }
-    };
+      }
 
-    // ฟังก์ชันบันทึกข้อมูลเครื่องดื่ม
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+      let newProductId = beverage.productId;
+      let newBeverageNumber = beverage.beverageNumber ?? 0;
 
-        // อัปโหลดรูปภาพก่อน
-        let beveragePictureUrl = beverage.beveragePicture;
-        if (beverage.file) {
-            beveragePictureUrl = await uploadToCloudinary(beverage.file);
-            if (!beveragePictureUrl) {
-                alert("Failed to upload image.");
-                return;
-            }
+      let beverageRef;
+
+      // ตรวจสอบชื่อซ้ำด้วย query (เฉพาะกรณีเพิ่มใหม่)
+      if (!beverage.productId) {
+        const duplicateQuery = query(
+          collection(db, "beverages"),
+          where("name", "==", beverage.name)
+        );
+        const duplicateSnapshot = await getDocs(duplicateQuery);
+
+        if (!duplicateSnapshot.empty) {
+          alert("ชื่อเครื่องดื่มนี้มีอยู่ในระบบแล้ว ไม่สามารถเพิ่มได้");
+          return;
         }
-        const status = beverage.stock <= 0 ? "หมด" : "มี";
-        const date = new Date().toLocaleString("en-US", {
-            timeZone: "Asia/Bangkok",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-        });
-        const beverageData = {
-             ...beverage,
-             beveragePicture: beveragePictureUrl ,
-             status: status,
-             file: undefined,
+      }
+
+      if (beverage.productId) {
+        const existingBeverageQuery = query(
+          collection(db, "beverages"),
+          where("productId", "==", beverage.productId)
+        );
+        const existingBeverageSnapshot = await getDocs(existingBeverageQuery);
+
+        if (!existingBeverageSnapshot.empty) {
+          const docId = existingBeverageSnapshot.docs[0].id;
+          beverageRef = doc(db, "beverages", docId);
+
+          await updateDoc(beverageRef, {
+            ...beverage,
+            imageUrl: imageUrl,
+            updatedAt: serverTimestamp(),
+          });
+
+          alert("อัปเดตข้อมูลเครื่องดื่มเรียบร้อยแล้ว!");
+        } else {
+          alert("ไม่พบข้อมูลเครื่องดื่มนี้!");
+          return;
+        }
+      } else {
+        const beverageCollection = collection(db, "beverages");
+        const lastBeverageQuery = query(
+          beverageCollection,
+          orderBy("beverageNumber", "desc"),
+          limit(1)
+        );
+        const lastBeverageSnapshot = await getDocs(lastBeverageQuery);
+
+        if (!lastBeverageSnapshot.empty) {
+          const lastBeverage = lastBeverageSnapshot.docs[0].data();
+          newBeverageNumber = lastBeverage.beverageNumber + 1;
+        } else {
+          newBeverageNumber = 1;
+        }
+
+        if (!newProductId) {
+          newProductId = `BEV${newBeverageNumber}`;
+        }
+
+        const { file, ...beverageData } = {
+          ...beverage,
+          productId: newProductId,
+          beverageNumber: newBeverageNumber,
+          category: "beverages",
+          imageUrl: imageUrl,
+          createdAt: serverTimestamp(),
         };
-        
-        if(!beverage.BEVID){
-            beverageData.createdAt = date;
-            const maxBeverageId = await getMaxBeverageId();
-            beverageData.BEVID = maxBeverageId;
-        }else{
-            beverageData.updatedAt = date;
+
+        beverageRef = await addDoc(beverageCollection, beverageData);
+        alert("เพิ่มเครื่องดื่มเรียบร้อยแล้ว!");
+      }
+
+      fetchBeverages();
+      handleCloseModal();
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการบันทึกข้อมูลเครื่องดื่ม:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลเครื่องดื่ม");
+    }
+  };
+
+  const handleEdit = (bev) => {
+    setBeverage({
+      name: bev.name,
+      description: bev.description,
+      productId: bev.productId,
+      price: bev.price,
+      imageUrl: bev.imageUrl,
+      createdAt: bev.createdAt,
+      updatedAt: serverTimestamp(),
+    });
+    setIsModalOpen(true);
+  };
+
+  const deleteImageFromCloudinary = async (publicId) => {
+    try {
+      const response = await fetch('/api/delete-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("ลบรูปภาพเรียบร้อยแล้ว:", data.message);
+      } else {
+        console.error("ไม่สามารถลบรูปภาพจาก Cloudinary ได้:", data.error || data);
+        alert("ไม่สามารถลบรูปภาพจาก Cloudinary ได้");
+      }
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการลบรูปภาพจาก Cloudinary:", error);
+      alert("เกิดข้อผิดพลาดในการลบรูปภาพจาก Cloudinary");
+    }
+  };
+
+  const handleDelete = async (productId) => {
+    const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบเครื่องดื่มนี้?");
+    if (!confirmDelete) return;
+
+    try {
+      console.log("กำลังค้นหาเอกสารด้วย beverageId:", productId);
+
+      const beveragesRef = collection(db, "beverages");
+      const q = query(beveragesRef, where("productId", "==", productId));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        alert("ไม่พบข้อมูลเครื่องดื่มนี้!");
+        return;
+      }
+
+      const docID = querySnapshot.docs[0].id;
+      const beverageData = querySnapshot.docs[0].data();
+
+      if (beverageData.imageUrl) {
+        const urlParts = beverageData.imageUrl.split("image/upload/");
+        if (urlParts.length > 1) {
+          let publicId = urlParts[1].split(".")[0];
+          const versionRemoved = publicId.split("/").slice(1).join("/");
+
+          if (versionRemoved) {
+            console.log("กำลังพยายามลบรูปภาพด้วย publicId:", versionRemoved);
+            await deleteImageFromCloudinary(versionRemoved);
+          } else {
+            console.error("ไม่พบ publicId ที่ถูกต้องหลังจากลบเวอร์ชัน:", beverageData.imageUrl);
+            alert("ไม่สามารถลบรูปภาพได้: ไม่พบ publicId ที่ถูกต้อง");
+            return;
+          }
+        } else {
+          console.error("รูปแบบ URL ของรูปภาพไม่ถูกต้อง:", beverageData.imageUrl);
+          alert("ไม่สามารถลบรูปภาพได้: รูปแบบ URL ไม่ถูกต้อง");
+          return;
         }
+      }
 
-        try {
-            let response;
-            if(beverage.BEVID !== ""){
-                response = await fetch("/api/beverages",{
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(beverageData),
-                });
-            } else {
-                response = await fetch("/api/beverages", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(beverageData),
-                });
-            }
-            if (response.ok) {
-                alert(beverage.BEVID ? "Beverage updated successfully!" : "Beverage added successfully!");
-                handleCloseModal();
-                fetchBeverages(); // ดึงข้อมูลใหม่หลังเพิ่ม
-            } else {
-                alert("Failed to save beverage.");
-            }
-        } catch (error) {
-            console.error("Error saving beverage:", error);
-            alert("Error saving beverage.");
-        }
-    };
+      await deleteDoc(doc(db, "beverages", docID));
+      alert("ลบเครื่องดื่มเรียบร้อยแล้ว!");
+      fetchBeverages();
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการลบเครื่องดื่ม:", error);
+      alert("เกิดข้อผิดพลาดในการลบเครื่องดื่ม: " + error.message);
+    }
+  };
 
-    const getMaxBeverageId = async () => {
-        try {
-            const response = await fetch("/api/beverages");
-            if(response.ok){
-                const beverages = await response.json();
-                if(beverages && beverages.length > 0){
-                    const maxBeverageId = Math.max(...beverages.map(bev => parseInt(bev.BEVID.replace('BEV',''))));
-                    return `BEV${maxBeverageId + 1}`;
-                }
-            }
-            return 'BEV1';
-        } catch (error) {
-            console.error("Error fetching beverages:", error);
-            return console.log("Can't add Beverages");
-        }
-    };
+  const fetchBeverages = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "beverages"));
+      const beveragesData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate() || null;
+        const updatedAt = data.updatedAt?.toDate() || null;
 
-    // แสดงหน้าแก้ไข
-    const handleEdit = (bev) => {
-        setBeverage({
-            name: bev.name,
-            BEVID: bev.BEVID,
-            category: bev.category,
-            description: bev.description,
-            price: bev.price,
-            stock: bev.stock,
-            status: bev.status,
-            beveragePicture: bev.beveragePicture,
-            createdAt: bev.createdAt,
-            updatedAt: bev.updatedAt,
-            file: null,
-        });
-        setIsModalOpen(true);
-    };
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+        };
+      });
+      setBeverages(beveragesData);
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการดึงข้อมูลเครื่องดื่ม:", error);
+    }
+  };
 
-    // ฟังก์ชันลบข้อมูลเครื่องดื่ม
-    const handleDelete = async (BEVID) => {
-        const confirmDelete = window.confirm('Are you want to delete this beverage?');
-        if(!confirmDelete) return;
+  useEffect(() => {
+    fetchBeverages();
+  }, []);
 
-        try {
-            console.log('Deleting beverage with ID:', BEVID); 
-            const response = await fetch("/api/beverages", {
-                method: "DELETE",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ BEVID: BEVID }),
-            });
-           
-            if(response.ok){
-                alert("Delete beverage successfully!");
-                fetchBeverages();
-            }else{
-                alert("Failed to delete beverage.");
-            }
-        } catch (error) {
-            console.log("Error deleting beverage", error);
-            alert("Error deleting beverage");
-        }
-    };
+  return (
+    <main className="p-5 flex flex-col gap-5">
+      <div className="flex flex-col bg-white p-6 rounded-xl shadow-md w-full overflow-auto">
+        <div className="flex items-center justify-between pb-4">
+          <h1 className="text-xl font-semibold">การจัดการเครื่องดื่ม</h1>
+          <Button
+            className="ml-auto py-3 font-semibold flex items-center bg-indigo-600 text-white hover:bg-[#3700B3]"
+            color="primary"
+            onClick={handleOpenModal}
+          >
+            เพิ่มเครื่องดื่ม <PlusCircle className="h-4 ml-2" />
+          </Button>
+        </div>
 
-    // ฟังก์ชันดึงข้อมูลเครื่องดื่มทั้งหมด
-    const fetchBeverages = async () => {
-        try {
-            const response = await fetch("/api/beverages");
-            if (response.ok) {
-                const data = await response.json();
-
-                if (data && data.length > 0){
-                    console.log("Fetched beverage data:", data); 
-                    setBeverages(data);
-                }else{
-                    console.log("No data found");
-                    setBeverages([]);
-                }
-            } else {
-                console.error("Failed to fetch beverages.");
-                setBeverages([]);
-            }
-        } catch (error) {
-            console.error("Error fetching beverages:", error);
-        }
-    };
-
-    // ดึงข้อมูลเครื่องดื่มเมื่อ component โหลดครั้งแรก
-    useEffect(() => {
-        fetchBeverages();
-    }, []);
-
-    const handleCategoryChange = (event) => {
-        setBeverage((prev) => ({
-          ...prev,
-          category: event.target.value,
-        }));
-    };
-
-
-      //const handleAddCategory = () => {
-        //if (newCategory && !categories.includes(newCategory)) {
-          //setCategories([...categories, newCategory]);
-          //setDessert((prev) => ({
-           // ...prev,
-           // category: newCategory,
-         // }));
-          //setNewCategory('');
-       // }
-      //};
-
-    return (
-        <main className="p-5 flex flex-col gap-5">
-        <div className="flex flex-col bg-white p-6 rounded-xl shadow-md w-full">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4">
-                <h1 className="text-xl font-semibold">Beverage Management</h1>
-                <Button
-                    className="ml-auto py-3 font-semibold flex items-center bg-indigo-600 text-white hover:bg-[#3700B3]"
-                    color="primary"
-                    onClick={handleOpenModal}
-                >
-                    Add Beverage <PlusCircle className="h-4 ml-2" />
-                </Button>
-            </div>
-
-            {/* Modal Form */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-xl  w-96">
-                        <h2 className="text-xl font-semibold mb-4">Add New Beverage</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div className="mb-4">
-                                <Input
-                                    name="name"
-                                    value={beverage.name}
-                                    onChange={handleInputChange}
-                                    label="Name"
-                                    fullWidth
-                                    required
-                                />
-                            </div>
-                            <div className="mb-4 m-1">
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                Category
-              </label>
-              <select
-                id="category"
-                name="category"
-                value={beverage.category}
-                onChange={handleCategoryChange}
-                className="px-2 py-1 border border-gray-300 rounded-md text-sm w-3/4"
-                required
-              >
-                <option value="" disabled>
-                  Select a category
-                </option>
-                {categories.map((category, index) => (
-                  <option key={index} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-           
-            </div>          
-                            <div className="mb-4">
-                                <Input
-                                    name="description"
-                                    value={beverage.description}
-                                    onChange={handleInputChange}
-                                    label="Description"
-                                    fullWidth
-                                    required
-                                />
-                            </div>
-                            <div className="mb-4">
-                                <Input
-                                    type = "number"
-                                    name="price"
-                                    value={beverage.price}
-                                    onChange={handleInputChange}
-                                    label="Price"
-                                    fullWidth
-                                    required
-                                />
-                            </div>
-                    
-                            <div className="mb-4">
-                            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2 ml-2">
-                                    Upload Beverage Photo
-                                </label>
-                                <Input
-                                    type="file"
-                                    onChange={(e) =>
-                                        setBeverage((prev) => ({
-                                            ...prev,
-                                            file: e.target.files[0],
-                                        }))
-                                    }
-                                    label=""
-                                    fullWidth
-                                />
-                            </div>
-                            <div className="flex justify-end gap-4">
-                                <Button onClick={handleCloseModal} auto flat color="error">
-                                    Cancel
-                                </Button>
-                                <Button type="submit" 
-                                color="primary"
-                                   className=" bg-indigo-600 text-white hover:bg-[#3700B3]"
-                                >
-                                    Save
-                                </Button>
-                            </div>
-                        </form>
-                    </div>
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl w-96">
+              <h2 className="text-xl font-semibold mb-4">เพิ่มเครื่องดื่มใหม่</h2>
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <Input
+                    name="name"
+                    value={beverage.name}
+                    onChange={handleInputChange}
+                    label="ชื่อ"
+                    fullWidth
+                    required
+                  />
                 </div>
-            )}
+                <div className="mb-4">
+                  <Input
+                    name="price"
+                    value={beverage.price}
+                    onChange={handleInputChange}
+                    label="ราคา"
+                    type="number"
+                    fullWidth
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <Input
+                    name="description"
+                    value={beverage.description}
+                    onChange={handleInputChange}
+                    label="คำอธิบาย"
+                    fullWidth
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2 ml-2">
+                    อัปโหลดรูปภาพเครื่องดื่ม
+                  </label>
+                  <Input
+                    type="file"
+                    title="เลือกภาพ"
+                    onChange={(e) =>
+                      setBeverage((prev) => ({
+                        ...prev,
+                        file: e.target.files[0],
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex justify-end gap-4">
+                  <Button onClick={handleCloseModal} auto flat color="error">
+                    ยกเลิก
+                  </Button>
+                  <Button
+                    type="submit"
+                    color="primary"
+                    className="bg-indigo-600 text-white hover:bg-[#3700B3]"
+                  >
+                    บันทึก
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
- {/* Beverage Table */}
-<div className="overflow-x-auto max-w-full">
-    <table className="min-w-full table-auto border-collapse border border-gray-300 rounded-lg shadow-sm">
-        <thead className="bg-indigo-300">
-            <tr>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ID</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Image</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Name</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Category</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Description</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Price</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">CreatedAt</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">UpdatedAt</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">Action</th>
-            </tr>
-        </thead>
-        <tbody className="bg-white">
-            {beverages.length === 0 ? (
+        <div className="overflow-x-auto max-w-full">
+          <table className="min-w-full table-fixed border-collapse border border-gray-300 rounded-lg shadow-sm">
+            <thead className="bg-indigo-300">
+              <tr>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">รหัสสินค้า</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">รูปภาพ</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ชื่อ</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">หมวดหมู่</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ราคา</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">คำอธิบาย</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">วันที่สร้าง</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">วันที่อัปเดต</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">การดำเนินการ</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white">
+              {beverages.length === 0 ? (
                 <tr>
-                    <td colSpan="9" className="px-4 py-2 text-center text-sm text-gray-500">No data</td>
+                  <td colSpan="9" className="px-4 py-2 text-center text-sm text-gray-500">
+                    ไม่มีข้อมูล
+                  </td>
                 </tr>
-            ) : (
+              ) : (
                 beverages
-                    .sort((a, b) => {
-                        // ดึงตัวเลขหลัง BEV แล้วเปรียบเทียบ
-                        const idA = parseInt(a.BEVID.replace('BEV', ''), 10);
-                        const idB = parseInt(b.BEVID.replace('BEV', ''), 10);
-                        return idA - idB; // เรียงลำดับจากน้อยไปมาก
-                    })
-                    .map((ber, index) => (
-                        <tr key={index}>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.BEVID}</td>
-                            <td className="px-4 py-2 border border-gray-300">
-                                <img
-                                    src={ber.beveragePicture}
-                                    alt="Profile"
-                                    className="h-10 w-10 rounded-full object-cover"
-                                />
-                            </td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.name}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.category}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.description}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.price}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.createdAt}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis overflow-hidden text-sm">{ber.updatedAt}</td>
-                            <td className="px-4 py-2 border border-gray-300 truncate max-w-xs text-ellipsis">
-                                <button
-                                    className="text-blue-500 hover:underline mr-2"
-                                    onClick={() => handleEdit(ber)}
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    className="text-red-500 hover:underline"
-                                    onClick={() => handleDelete(ber.BEVID)}
-                                >
-                                    Delete
-                                </button>
-                            </td>
-                        </tr>
-                    ))
-            )}
-        </tbody>
-    </table>
-</div>
-</div>
-</main>
-    );
+                  .sort((a, b) => {
+                    const productIdA = parseInt(a.productId.replace("BEV", ""));
+                    const productIdB = parseInt(b.productId.replace("BEV", ""));
+                    return productIdA - productIdB;
+                  })
+                  .map((beverage, index) => (
+                    <tr key={index}>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">{beverage.productId}</td>
+                      <td className="px-4 py-2 border border-gray-300">
+                        <img
+                          src={beverage.imageUrl}
+                          alt="เครื่องดื่ม"
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      </td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">{beverage.name}</td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">{beverage.category}</td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">{beverage.price}</td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">{beverage.description}</td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">
+                        {new Date(beverage.createdAt).toLocaleString("th-TH")}
+                      </td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">
+                        {beverage.updatedAt ? new Date(beverage.updatedAt).toLocaleString("th-TH") : ""}
+                      </td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm">
+                        <button
+                          className="text-blue-500 hover:underline mr-2"
+                          onClick={() => handleEdit(beverage)}
+                        >
+                          แก้ไข
+                        </button>
+                        <button
+                          className="text-red-500 hover:underline"
+                          onClick={() => handleDelete(beverage.productId)}
+                        >
+                          ลบ
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  );
 }

@@ -1,5 +1,5 @@
 import { db } from "@/lib/firestore/firebase"; 
-import { collection, getDocs,getDoc, addDoc, doc, deleteDoc,query,where,updateDoc } from "firebase/firestore";
+import { collection, getDocs,getDoc, addDoc, doc, deleteDoc,query,where,updateDoc,serverTimestamp,orderBy,limit } from "firebase/firestore";
 
 // ฟังก์ชัน GET: ดึงข้อมูลพนักงานทั้งหมด
 export async function GET() {
@@ -34,14 +34,14 @@ export async function POST(request) {
             return new Response(JSON.stringify({ message: "Invalid employee data" }), { status: 400 });
         }
 
-        if (!newEmployee.idCardNumber) {
+        if (!newEmployee.idCard) {
             return new Response(JSON.stringify({ message: "ID card number is required" }), { status: 400 });
         }
 
         // เช็คว่ามีหมายเลขบัตรประชาชนนี้อยู่ใน Firestore แล้วหรือไม่
         const employeeQuery = query(
             collection(db, "employees"),
-            where("idCardNumber", "==", newEmployee.idCardNumber)
+            where("idCard", "==", newEmployee.idCard)
         );
         const existingEmployeeSnapshot = await getDocs(employeeQuery);
 
@@ -49,11 +49,28 @@ export async function POST(request) {
             return new Response(JSON.stringify({ message: "Employee with this ID card number already exists" }), { status: 400 });
         }
 
-        // ถ้าไม่ซ้ำ ให้เพิ่มข้อมูลพนักงานใหม่
-        const docRef = await addDoc(collection(db, "employees"), newEmployee);
+        // ค้นหา EMPID ล่าสุด
+        const lastEmployeeQuery = query(collection(db, "employees"), orderBy("EMPID", "desc"), limit(1));
+        const lastEmployeeSnapshot = await getDocs(lastEmployeeQuery);
+        
+        let newEMPID = "EMP1"; // กำหนดค่าเริ่มต้นให้ EMPID เป็น EMP1 ถ้าไม่มีพนักงานในระบบ
+
+        if (!lastEmployeeSnapshot.empty) {
+            const lastEmployeeData = lastEmployeeSnapshot.docs[0].data();
+            const lastEMPID = lastEmployeeData.EMPID; // ค่าล่าสุดของ EMPID
+            const lastEMPIDNumber = parseInt(lastEMPID.replace("EMP", ""), 10); // แปลง EMPID เป็นตัวเลข
+            newEMPID = `EMP${lastEMPIDNumber + 1}`; // เพิ่ม 1 ให้ EMPID
+        }
+
+        // เพิ่มข้อมูลพนักงานใหม่โดยใช้ addDoc
+        const docRef = await addDoc(collection(db, "employees"), {
+            ...newEmployee,
+            createdAt: serverTimestamp(),
+            EMPID: newEMPID, // เพิ่ม EMPID ที่คำนวณได้
+        });
 
         return new Response(
-            JSON.stringify({ id: docRef.id, ...newEmployee }), // ส่ง ID ที่ Firestore สร้างให้
+            JSON.stringify({ id: docRef.id, EMPID: newEMPID, ...newEmployee }),
             { status: 201 }
         );
     } catch (error) {
@@ -64,6 +81,7 @@ export async function POST(request) {
         );
     }
 }
+
 
 // PUT
 export async function PUT(request) {
@@ -113,7 +131,6 @@ export async function PUT(request) {
 
 
 
-// DELETE
 // DELETE
 export async function DELETE(request) {
     try {

@@ -15,11 +15,11 @@ export default function Sidebar() {
     };
 
     const menuList = [
-        { name: "Employee", Link: "/admin/employee", icon: <UserSearch className="h-5 w-5" /> },
-        { name: "Member", Link: "/admin/member", icon: <NotebookText className="h-5 w-5" /> },
-        { name: "Dessert", Link: "/admin/dessert", icon: <CakeSlice className="h-5 w-5" /> },
-        { name: "Beverage", Link: "/admin/beverage", icon: <GlassWaterIcon className="h-5 w-5" /> },
-        { name: "Order", Link: "/admin/order", icon: <ListOrdered className="h-5 w-5" /> },
+        { name: "พนักงาน", Link: "/admin/employee", icon: <UserSearch className="h-5 w-5" /> },
+        { name: "สมาชิก", Link: "/admin/member", icon: <NotebookText className="h-5 w-5" /> },
+        { name: "ของหวาน", Link: "/admin/dessert", icon: <CakeSlice className="h-5 w-5" /> },
+        { name: "เครื่องดื่ม", Link: "/admin/beverage", icon: <GlassWaterIcon className="h-5 w-5" /> },
+        { name: "รายละเอียดคำสั่งซื้อ", Link: "/admin/order", icon: <ListOrdered className="h-5 w-5" /> },
     ];
 
     return (
@@ -39,7 +39,7 @@ export default function Sidebar() {
                 onClick={handleLogout}
             >
                 <LogOut className="h-5 w-5" />
-                Logout
+                ออกจากระบบ
             </button>
         </section>
     );
