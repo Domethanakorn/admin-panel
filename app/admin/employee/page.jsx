@@ -7,6 +7,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy,
 
 export default function EmployeeList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPasswords, setShowpasswords] = useState({});
   const [employee, setEmployee] = useState({
     name: "",
     surname: "",
@@ -15,6 +16,7 @@ export default function EmployeeList() {
     phone: "",
     address: "",
     currentAddress: "",
+    password: "",
     startDate: "",
     createdAt: null,
     updatedAt: null,
@@ -31,6 +33,7 @@ export default function EmployeeList() {
       phone: "",
       address: "",
       currentAddress: "",
+      password: "",
       startDate: "",
       createdAt: null,
       updatedAt: null,
@@ -98,18 +101,31 @@ export default function EmployeeList() {
 
       // ตรวจสอบชื่อและนามสกุลซ้ำ (เฉพาะกรณีเพิ่มใหม่)
       if (!employee.EMPID) {
+        // ตรวจสอบชื่อและนามสกุลซ้ำ
         const duplicateQuery = query(
           collection(db, "employees"),
           where("name", "==", employee.name),
           where("surname", "==", employee.surname)
         );
         const duplicateSnapshot = await getDocs(duplicateQuery);
-
+    
         if (!duplicateSnapshot.empty) {
           alert("ชื่อและนามสกุลนี้มีอยู่ในระบบแล้ว ไม่สามารถเพิ่มได้");
           return;
         }
-      }
+    
+        // ตรวจสอบรหัสผ่านซ้ำ
+        const passwordQuery = query(
+          collection(db, "employees"),
+          where("password", "==", employee.password) 
+        );
+        const passwordSnapshot = await getDocs(passwordQuery);
+    
+        if (!passwordSnapshot.empty) {
+          alert("รหัสผ่านมีอยู่ในระบบอยู่เเล้ว ไม่สามารถเพิ่มได้");
+          return;
+        }
+    }
 
       if (employee.EMPID) {
         const existingEmployeeQuery = query(
@@ -182,6 +198,7 @@ export default function EmployeeList() {
       phone: emp.phone,
       address: emp.address,
       currentAddress: emp.currentAddress,
+      password: emp.password,
       startDate: emp.startDate,
       createdAt: emp.createdAt,
       updatedAt: serverTimestamp(),
@@ -286,6 +303,14 @@ export default function EmployeeList() {
     fetchEmployees();
   }, []);
 
+
+  const togglePassword = (empId) => {
+    setShowpasswords((prev) => ({
+      ...prev,
+      [empId]: !prev[empId],
+    }))
+  }
+
   return (
     <main className="p-5 flex flex-col gap-5">
       <div className="flex flex-col bg-white p-6 rounded-xl shadow-md w-full overflow-auto">
@@ -369,6 +394,16 @@ export default function EmployeeList() {
                 </div>
                 <div className="mb-4">
                   <Input
+                    name="password"
+                    value={employee.password}
+                    onChange={handleInputChange}
+                    label="รหัสผ่านพนักงาน"
+                    fullWidth
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <Input
                     name="startDate"
                     type="date"
                     value={employee.startDate}
@@ -410,7 +445,8 @@ export default function EmployeeList() {
           </div>
         )}
 
-        <div className="overflow-x-auto max-w-full">
+          <div className="overflow-x-auto max-w-full">
+          <div className="overflow-y-auto max-h-[680px]">
           <table className="min-w-full table-fixed border-collapse border border-gray-300 rounded-lg shadow-sm">
             <thead className="bg-indigo-300">
               <tr>
@@ -420,8 +456,9 @@ export default function EmployeeList() {
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">นามสกุล</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">เลขบัตรประชาชน</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">เบอร์โทรศัพท์</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ที่อยู่ตามบัตรประชาชน</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ที่อยู่ปัจจุบัน</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">ที่อยู่ตามบัตรประชาชน</th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">รหัสผ่านพนักงาน</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">วันที่เริ่มงาน</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">วันที่สร้าง</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border border-gray-300">วันที่อัปเดต</th>
@@ -458,6 +495,14 @@ export default function EmployeeList() {
                       <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.phone}</td>
                       <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.address}</td>
                       <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.currentAddress}</td>
+                      <td className="px-4 py-2 border border-gray-300 text-sm truncate">
+                        {showPasswords[emp.EMPID] ? emp.password : "******"}
+                        <button className="ml-2 text-gray-500 hover:text-gray-700" onClick={() => togglePassword(emp.EMPID)}>
+                          {showPasswords[emp.EMPID] ? "ซ่อน" : "เเสดง"}
+                          </button>
+                        </td>
+                        
+                      
                       <td className="px-4 py-2 border border-gray-300 text-sm truncate">{emp.startDate}</td>
                       <td className="px-4 py-2 border border-gray-300 text-sm truncate">
                         {new Date(emp.createdAt).toLocaleString("th-TH")}
@@ -485,6 +530,7 @@ export default function EmployeeList() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </main>
   );

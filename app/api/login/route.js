@@ -17,15 +17,20 @@ export async function POST(request){
          const userDoc = employeeSnapshot.docs[0];
          const userData = userDoc.data();
 
-         if (userData.idCard !== password){
+         if (userData.password !== password){
             return new Response(JSON.stringify({message: "Invalid password"}), {status: 404});
             
          }
+            return new Response(
+               JSON.stringify({
+                  message: "Login successful",
+                  name: userData.name || "Unknown",
+                  surname: userData.surname || "Unknown",
+                  EMPID: userData.EMPID
+               }),
+               { status: 200 }
+            );
 
-            return new Response(JSON.stringify({messeage: "Login successful"}), {status: 200})
-        
-
-        
     }catch(error){
             console.log("Error:",error);
           

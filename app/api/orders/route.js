@@ -1,5 +1,5 @@
 import { db } from "@/lib/firestore/firebase";
-import { collection, getDocs, addDoc,  getDoc, query, orderBy, limit, serverTimestamp,runTransaction,doc } from "firebase/firestore";
+import { collection, getDocs, addDoc,  getDoc, query, orderBy, limit, serverTimestamp,doc,where,updateDoc } from "firebase/firestore";
 
 // 🔹 GET: ดึงรายการสั่งซื้อทั้งหมด
 export async function GET() {
@@ -32,46 +32,73 @@ export async function POST(request) {
         // รับข้อมูลจาก request body
         const orderData = await request.json();
 
-        // ตรวจสอบข้อมูลว่าถูกต้องหรือไม่
+        // ตรวจสอบข้อมูลหลักว่าถูกต้องหรือไม่
         if (!orderData || !orderData.OrderItems || orderData.OrderItems.length === 0) {
             return new Response(JSON.stringify({ message: "Invalid order data" }), { status: 400 });
         }
 
-      
-        const newOrderData = await runTransaction(db, async (transaction) => {
-            const orderRef = collection(db, "orders");
+        // อ้างอิง collection orders
+        const orderRef = collection(db, "orders");
+        
+        // หา order ล่าสุด
+        const lastOrderQuery = query(orderRef, orderBy("orderNumber", "desc"), limit(1));
+        const lastOrderSnapshot = await getDocs(lastOrderQuery);
+        let lastOrderId = 0;
+        if (!lastOrderSnapshot.empty) {
+            lastOrderId = lastOrderSnapshot.docs[0].data().orderNumber || 0;
+        }
+        const newOrderId = `ORD${lastOrderId + 1}`;
 
-            const lastOrderQuery = query(orderRef, orderBy("orderNumber", "desc"), limit(1));
-            const lastOrderSnapshot = await getDocs(lastOrderQuery);
+        // คำนวณแต้มและอัพเดทสมาชิก (ไม่มีเงื่อนไขตรวจ phoneNumber)
+        let pointsEarned = 0;
+        let pointsUpdated = 0;
 
-            let lastOrderId = 0;
-            if (!lastOrderSnapshot.empty) {
-                const lastOrder = lastOrderSnapshot.docs[0].data();
-                lastOrderId = lastOrder.orderNumber || 0;
+        // ถ้ามี phoneNumber ให้ลองค้นหาและอัพเดท
+        if (orderData.phoneNumber) {
+            pointsEarned = Math.floor(orderData.TotalPrice / 100) * 10;
+            
+            const memberRef = collection(db, "members");
+            const memberQuery = query(memberRef, where("phoneNumber", "==", orderData.phoneNumber));
+            const memberSnapshot = await getDocs(memberQuery);
+
+            if (!memberSnapshot.empty) {
+                const memberDoc = memberSnapshot.docs[0];
+                const memberId = memberDoc.id;
+                const currentPoints = memberDoc.data().points || 0;
+                await updateDoc(doc(db, "members", memberId), {
+                    points: currentPoints + pointsEarned
+                });
+                pointsUpdated = pointsEarned;
+            } else {
+                console.log(`No member found with phone number: ${orderData.phoneNumber}`);
             }
+        }
 
-            const newOrderId = `ORD${lastOrderId + 1}`;
+        // สร้างข้อมูลออเดอร์ใหม่
+        const newOrder = {
+            OrderID: newOrderId,
+            orderNumber: lastOrderId + 1,
+            name: orderData.name || null,       
+            surname: orderData.surname || null,  
+            phoneNumber: orderData.phoneNumber || null,
+            OrderItems: orderData.OrderItems,
+            TotalPrice: orderData.TotalPrice,
+            OrderDate: serverTimestamp(),
+            pointsEarned: pointsUpdated
+        };
 
-            // สร้างข้อมูลออเดอร์ใหม่
-            const newOrder = {
-                OrderID: newOrderId,
-                orderNumber: lastOrderId + 1, 
-                EMPID: orderData.EMPID,
-                phoneNumber: orderData.phoneNumber,
-                OrderItems: orderData.OrderItems,
-                TotalPrice: orderData.TotalPrice,
-                OrderDate: serverTimestamp(),
-            };
-
-         
-            const newDocRef = await addDoc(orderRef, newOrder);
-            return newDocRef;
-        });
+        const newDocRef = await addDoc(orderRef, newOrder);
 
         return new Response(
-            JSON.stringify({ message: "Order added successfully", orderID: newOrderData.id }),
+            JSON.stringify({ 
+                message: "Order added successfully", 
+                orderID: newDocRef.id,
+                pointsEarned: pointsUpdated,
+                phoneNumber: orderData.phoneNumber || null
+            }),
             { status: 201 }
         );
+
     } catch (error) {
         console.error("Error:", error.message);
         return new Response(

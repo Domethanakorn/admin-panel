@@ -355,8 +355,8 @@ export default function BeverageList() {
             </div>
           </div>
         )}
-
         <div className="overflow-x-auto max-w-full">
+        <div className="overflow-y-auto max-h-[680px]">
           <table className="min-w-full table-fixed border-collapse border border-gray-300 rounded-lg shadow-sm">
             <thead className="bg-indigo-300">
               <tr>
@@ -425,6 +425,7 @@ export default function BeverageList() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </main>
   );
